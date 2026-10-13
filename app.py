@@ -36,6 +36,7 @@ st.markdown('<div class="sub-header">Live Camera & Image AI Inspection System</d
 
 # Load Custom Trained Model
 MODEL_PATHS = [
+    "best.pt",
     "runs/detect/road_damage_model-2/weights/best.pt",
     "runs/detect/road_damage_fast/weights/best.pt",
     "yolov8n.pt"
