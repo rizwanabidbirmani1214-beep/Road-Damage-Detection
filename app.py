@@ -1,152 +1,91 @@
 import streamlit as st
+from ultralytics import YOLO
 import cv2
+import tempfile
+import os
 import numpy as np
 from PIL import Image
-from ultralytics import YOLO
-import os
 
-# Page Settings
+# Page Configuration for the Streamlit web application
 st.set_page_config(
-    page_title="AI Road Damage Detection & Severity System",
-    page_icon="🛣️",
+    page_title="AI Road Damage & Pothole Inspector",
     layout="wide"
 )
 
-# Custom Styling
-st.markdown("""
-    <style>
-    .main-header {
-        font-size: 30px;
-        font-weight: 700;
-        color: #1E3A8A;
-        text-align: center;
-        margin-bottom: 5px;
-    }
-    .sub-header {
-        font-size: 15px;
-        text-align: center;
-        color: #4B5563;
-        margin-bottom: 25px;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-st.markdown('<div class="main-header">🛣️ AI Road Damage Detection & Severity Analysis System</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Live Camera & Image AI Inspection System</div>', unsafe_allow_html=True)
-
-# Load Custom Trained Model
-MODEL_PATHS = [
-    "best.pt",
-    "runs/detect/road_damage_model-2/weights/best.pt",
-    "runs/detect/road_damage_fast/weights/best.pt",
-    "yolov8n.pt"
-]
-
-@st.cache_resource
-def load_trained_model():
-    for path in MODEL_PATHS:
-        if os.path.exists(path):
-            return YOLO(path), path
-    return YOLO("yolov8n.pt"), "Base YOLOv8n"
-
-model, loaded_path = load_trained_model()
-
-# Severity Evaluation Logic
-def calculate_severity(pothole_count, total_box_area_ratio):
-    if pothole_count == 0:
-        return "Normal / Safe Road", "Road condition is safe. No maintenance needed.", "green"
-    elif pothole_count <= 2 and total_box_area_ratio < 5.0:
-        return "Low Priority", "Minor damage detected. Add to scheduled maintenance.", "blue"
-    elif pothole_count <= 4 and total_box_area_ratio < 12.0:
-        return "Medium Priority", "Moderate damage. Repair recommended within 14 days.", "orange"
-    else:
-        return "High Priority (Critical)", "Severe road damage! Immediate repair required to prevent accidents.", "red"
-
-# Sidebar Controls
-st.sidebar.header("⚙️ System Control Panel")
-st.sidebar.success(f"Model Active: {os.path.basename(loaded_path)}")
-
-confidence = st.sidebar.slider("AI Confidence Threshold", min_value=0.10, max_value=0.90, value=0.25, step=0.05)
-
-input_mode = st.sidebar.radio(
-    "Choose Input Mode:",
-    ("📸 Live Camera Snap", "📁 Upload Image File", "🗂️ Dataset Test Images")
-)
-
+# Developer & Creator Credit Section in Sidebar
 st.sidebar.markdown("---")
-st.sidebar.info("**Classes:** Pothole\n**Framework:** Ultralytics YOLOv8 + Streamlit")
+st.sidebar.markdown("### Project Developer & AI Engineer")
+st.sidebar.success("**Rizwan Abid**\n\n*Computer Vision & AI Researcher*\n*The University of Lahore*")
+st.sidebar.markdown("---")
 
-selected_image = None
+# Sidebar control for confidence threshold adjustment
+st.sidebar.header("Detection Settings")
+conf_threshold = st.sidebar.slider("AI Confidence Threshold", 0.01, 1.00, 0.25, 0.01)
 
-# Input Handling
-if input_mode == "📸 Live Camera Snap":
-    st.write("### 📸 Live Camera Capture")
-    camera_photo = st.camera_input("Road ya pothole ki taraf camera karke 'Take Photo' dabayein:")
-    if camera_photo is not None:
-        selected_image = Image.open(camera_photo)
+st.title("AI Road Damage & Pothole Detection System")
+st.markdown("Enterprise-grade YOLOv8-powered Road Inspection System for Images and Videos.")
 
-elif input_mode == "📁 Upload Image File":
-    uploaded_file = st.file_uploader("Upload Road Picture (JPG, PNG)", type=["jpg", "jpeg", "png"])
+# Load the trained YOLOv8 model from GitHub repository weights
+@st.cache_resource
+def load_model():
+    return YOLO('best.pt')
+
+try:
+    model = load_model()
+except Exception as e:
+    st.error(f"Error loading model weights: {e}. Please ensure 'best.pt' is present in the GitHub repository.")
+
+# Select input mode: Image upload or Dashcam video processing
+option = st.radio("Select Input Mode:", ("Image Upload & Detection", "Dashcam Video Processing"))
+
+if option == "Image Upload & Detection":
+    uploaded_file = st.file_uploader("Upload a road surface image...", type=["jpg", "jpeg", "png"])
+    
     if uploaded_file is not None:
-        selected_image = Image.open(uploaded_file)
+        image = Image.open(uploaded_file)
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Captured / Input Image")
+            st.image(image, use_container_width=True)
+            
+        with col2:
+            st.subheader("AI YOLOv8 Detection Result")
+            with st.spinner("Analyzing road surface..."):
+                results = model(image, conf=conf_threshold)
+                res_plotted = results[0].plot()
+                st.image(res_plotted, channels="BGR", use_container_width=True)
 
-else:
-    dataset_folder = "pothole_dataset/images/valid"
-    if os.path.exists(dataset_folder):
-        available_images = [f for f in os.listdir(dataset_folder) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-        if available_images:
-            chosen_file = st.selectbox("Choose Image from Validation Dataset:", available_images[:25])
-            selected_image = Image.open(os.path.join(dataset_folder, chosen_file))
-        else:
-            st.warning("No images found in dataset valid folder.")
-    else:
-        st.info("Dataset folder not found. Please use Camera or Upload mode.")
-
-# AI Prediction and Results
-if selected_image is not None and model is not None:
-    img_rgb = np.array(selected_image.convert("RGB"))
-    img_h, img_w, _ = img_rgb.shape
-    total_img_area = img_h * img_w
+elif option == "Dashcam Video Processing":
+    uploaded_video = st.file_uploader("Upload a dashcam video (.mp4 / .avi)...", type=["mp4", "avi", "mov"])
     
-    with st.spinner("AI scanning image and calculating damage severity..."):
-        results = model.predict(source=img_rgb, conf=confidence, imgsz=320)
-        result = results[0]
+    if uploaded_video is not None:
+        # Save uploaded video to a temporary file for OpenCV processing
+        tfile = tempfile.NamedTemporaryFile(delete=False)
+        tfile.write(uploaded_video.read())
         
-        boxes = result.boxes
-        potholes_count = len(boxes)
-        total_pothole_pixels = 0
+        vidcap = cv2.VideoCapture(tfile.name)
+        total_frames = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
         
-        if potholes_count > 0:
-            for b in boxes.xyxy.cpu().numpy():
-                x1, y1, x2, y2 = b
-                total_pothole_pixels += (x2 - x1) * (y2 - y1)
+        st.info(f"Video loaded successfully! Total frames: {total_frames}. Processing video stream...")
+        
+        st_frame = st.empty()
+        pothole_counter = 0
+        
+        while vidcap.isOpened():
+            success, frame = vidcap.read()
+            if not success:
+                break
                 
-        area_percentage = round((total_pothole_pixels / total_img_area) * 100, 2)
-        severity_label, action_text, color_code = calculate_severity(potholes_count, area_percentage)
-        annotated_image = result.plot()
-
-    st.markdown("---")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("📷 Captured / Input Image")
-        st.image(selected_image, use_container_width=True)
-    with col2:
-        st.subheader("🎯 AI YOLOv8 Detection Result")
-        st.image(annotated_image, use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("📊 Damage & Severity Inspection Report")
-    
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Potholes Identified", f"{potholes_count}")
-    m2.metric("Surface Damage Area", f"{area_percentage}%")
-    m3.metric("Severity Level", severity_label)
-    
-    if "Critical" in severity_label:
-        st.error(f"🚨 **Action Plan:** {action_text}")
-    elif "Medium" in severity_label:
-        st.warning(f"⚠️ **Action Plan:** {action_text}")
-    elif "Low" in severity_label:
-        st.info(f"ℹ️ **Action Plan:** {action_text}")
-    else:
-        st.success(f"✅ **Action Plan:** {action_text}")
+            # Perform inference on each video frame
+            results = model(frame, conf=conf_threshold, verbose=False)
+            annotated_frame = results[0].plot()
+            
+            # Accumulate total detections across all frames
+            pothole_counter += len(results[0].boxes)
+            
+            # Render processed frame in real-time
+            st_frame.image(annotated_frame, channels="BGR", use_container_width=True)
+            
+        vidcap.release()
+        st.success(f"Video processing complete! Total potholes detected across frames: {pothole_counter}")
