@@ -23,7 +23,7 @@ st.sidebar.header("Detection Settings")
 conf_threshold = st.sidebar.slider("AI Confidence Threshold", 0.01, 1.00, 0.25, 0.01)
 
 st.title("AI Road Damage & Pothole Detection System")
-st.markdown("Enterprise-grade YOLOv8-powered Road Inspection System for Images and Videos.")
+st.markdown("Enterprise-grade YOLOv8-powered Road Inspection System for Images, Live Camera, and Videos.")
 
 # Load the trained YOLOv8 model from GitHub repository weights
 @st.cache_resource
@@ -35,8 +35,8 @@ try:
 except Exception as e:
     st.error(f"Error loading model weights: {e}. Please ensure 'best.pt' is present in the GitHub repository.")
 
-# Select input mode: Image upload or Dashcam video processing
-option = st.radio("Select Input Mode:", ("Image Upload & Detection", "Dashcam Video Processing"))
+# Select input mode: Image upload, Live camera capture, or Dashcam video processing
+option = st.radio("Select Input Mode:", ("Image Upload & Detection", "Live Camera Capture", "Dashcam Video Processing"))
 
 if option == "Image Upload & Detection":
     uploaded_file = st.file_uploader("Upload a road surface image...", type=["jpg", "jpeg", "png"])
@@ -56,6 +56,28 @@ if option == "Image Upload & Detection":
                 res_plotted = results[0].plot()
                 st.image(res_plotted, channels="BGR", use_container_width=True)
 
+elif option == "Live Camera Capture":
+    st.subheader("Live Camera Capture")
+    st.markdown("Use your mobile or laptop camera to capture a road image for instant pothole detection.")
+    
+    # Built-in Streamlit camera input widget for mobile and desktop cameras
+    camera_image = st.camera_input("Take a picture of the road")
+    
+    if camera_image is not None:
+        image = Image.open(camera_image)
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Captured Camera Frame")
+            st.image(image, use_container_width=True)
+            
+        with col2:
+            st.subheader("AI YOLOv8 Detection Result")
+            with st.spinner("Analyzing live capture..."):
+                results = model(image, conf=conf_threshold)
+                res_plotted = results[0].plot()
+                st.image(res_plotted, channels="BGR", use_container_width=True)
+
 elif option == "Dashcam Video Processing":
     uploaded_video = st.file_uploader("Upload a dashcam video (.mp4 / .avi)...", type=["mp4", "avi", "mov"])
     
@@ -65,9 +87,9 @@ elif option == "Dashcam Video Processing":
         tfile.write(uploaded_video.read())
         
         vidcap = cv2.VideoCapture(tfile.name)
-        total_frames = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
+        total_frames = int(vidcap.get(vidcap.get(cv2.CAP_PROP_FRAME_COUNT) if hasattr(cv2, 'CAP_PROP_FRAME_COUNT') else 0))
         
-        st.info(f"Video loaded successfully! Total frames: {total_frames}. Processing video stream...")
+        st.info("Video loaded successfully! Processing video stream...")
         
         st_frame = st.empty()
         pothole_counter = 0
