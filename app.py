@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 from datetime import datetime
+import requests
+from streamlit_geolocation import streamlit_geolocation
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -21,7 +23,7 @@ st.set_page_config(
 # Initialize Session State for Dynamic Inspection Logs
 if 'inspection_logs' not in st.session_state:
     st.session_state.inspection_logs = pd.DataFrame(columns=[
-        "Timestamp", "Latitude", "Longitude", "Detections", "Severity"
+        "Timestamp", "Location Name", "Detections", "Severity"
     ])
 
 # Developer & Creator Credit Section in Sidebar
@@ -30,11 +32,42 @@ st.sidebar.markdown("### Project Developer & AI Engineer")
 st.sidebar.success("**Rizwan Abid**\n\n*Computer Vision & AI Researcher*\n*The University of Lahore*")
 st.sidebar.markdown("---")
 
+# Real-time Browser GPS Location Widget in Sidebar
+st.sidebar.header("📍 Live GPS Location Fetcher")
+st.sidebar.markdown("Click below to fetch your exact real-time location from your device/browser:")
+loc = streamlit_geolocation()
+
+# Function to get readable address from Latitude & Longitude using OpenStreetMap
+def get_address_from_latlon(lat, lon):
+    if not lat or not lon:
+        return "Unknown Location (GPS Inactive)"
+    try:
+        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1"
+        headers = {'User-Agent': 'RoadDamageAuditApp/1.0'}
+        response = requests.get(url, headers=headers, timeout=5)
+        data = response.json()
+        address = data.get('display_name', f"Lat: {lat:.4f}, Lon: {lon:.4f}")
+        # Shorten address for neat display if too long
+        parts = address.split(',')
+        short_address = ", ".join(parts[:3]) if len(parts) >= 3 else address
+        return short_address
+    except Exception:
+        return f"Lat: {lat:.4f}, Lon: {lon:.4f}"
+
+# Determine current location string based on browser GPS
+current_location_name = "Default Zone - Lahore"
+if loc and loc.get('latitude') and loc.get('longitude'):
+    lat = loc['latitude']
+    lon = loc['longitude']
+    current_location_name = get_address_from_latlon(lat, lon)
+
+st.sidebar.info(f"**Current Detected Location:**\n\n{current_location_name}")
+
 # Sidebar control for confidence threshold adjustment
 conf_threshold = st.sidebar.slider("AI Confidence Threshold", 0.01, 1.00, 0.25, 0.01)
 
 st.title("AI Road Damage & Pothole Detection System")
-st.markdown("Enterprise-grade YOLOv8-powered Road Inspection System with Dynamic GPS Mapping & Real-time PDF Reporting.")
+st.markdown("Enterprise-grade YOLOv8-powered Road Inspection System with Real-time GPS Location & PDF Reporting.")
 
 # Load the trained YOLOv8 model from GitHub repository weights
 @st.cache_resource
@@ -46,7 +79,7 @@ try:
 except Exception as e:
     st.error(f"Error loading model weights: {e}. Please ensure 'best.pt' is present in the GitHub repository.")
 
-# Select input mode: Image upload, Live camera capture, Dashcam video processing, GIS Map, or PDF Report
+# Select input mode
 option = st.radio(
     "Select Input Mode:", 
     ("Image Upload & Detection", "Live Camera Capture", "Dashcam Video Processing", "GIS Road Health Map", "Automated PDF Audit Report")
@@ -74,13 +107,12 @@ if option == "Image Upload & Detection":
                 
                 num_detections = len(results[0].boxes)
                 severity = "Critical" if num_detections > 5 else ("Moderate" if num_detections > 2 else "Low")
-                st.info(f"Analysis Summary: {num_detections} road damage instance(s) detected. Severity: {severity}")
+                st.info(f"Analysis Summary: {num_detections} road damage instance(s) detected. Location: {current_location_name}")
                 
-                # Append to session logs with dynamic coordinates around Lahore & current timestamp
+                # Append to session logs with real location name
                 new_log = {
                     "Timestamp": current_time_str,
-                    "Latitude": 31.48 + np.random.uniform(-0.01, 0.01),
-                    "Longitude": 74.32 + np.random.uniform(-0.01, 0.01),
+                    "Location Name": current_location_name,
                     "Detections": num_detections,
                     "Severity": severity
                 }
@@ -109,12 +141,11 @@ elif option == "Live Camera Capture":
                 
                 num_detections = len(results[0].boxes)
                 severity = "Critical" if num_detections > 5 else ("Moderate" if num_detections > 2 else "Low")
-                st.info(f"Analysis Summary: {num_detections} road damage instance(s) detected. Severity: {severity}")
+                st.info(f"Analysis Summary: {num_detections} road damage instance(s) detected. Location: {current_location_name}")
                 
                 new_log = {
                     "Timestamp": current_time_str,
-                    "Latitude": 31.48 + np.random.uniform(-0.01, 0.01),
-                    "Longitude": 74.32 + np.random.uniform(-0.01, 0.01),
+                    "Location Name": current_location_name,
                     "Detections": num_detections,
                     "Severity": severity
                 }
@@ -147,31 +178,28 @@ elif option == "Dashcam Video Processing":
             
         vidcap.release()
         severity = "Critical" if pothole_counter > 10 else ("Moderate" if pothole_counter > 5 else "Low")
-        st.success(f"Video processing complete! Total potholes detected: {pothole_counter}")
+        st.success(f"Video processing complete! Total potholes detected: {pothole_counter} at {current_location_name}")
         
         new_log = {
             "Timestamp": current_time_str,
-            "Latitude": 31.50 + np.random.uniform(-0.01, 0.01),
-            "Longitude": 74.35 + np.random.uniform(-0.01, 0.01),
+            "Location Name": current_location_name,
             "Detections": pothole_counter,
             "Severity": severity
         }
         st.session_state.inspection_logs = pd.concat([st.session_state.inspection_logs, pd.DataFrame([new_log])], ignore_index=True)
 
 elif option == "GIS Road Health Map":
-    st.subheader("Interactive GIS Road Damage Heatmap & Dynamic Logs")
-    st.markdown("Geospatial tracking of detected road hazards based on live session inspections.")
+    st.subheader("Interactive Inspection Logs & Location Records")
+    st.markdown("Detailed breakdown of inspected zones and real-time location logs.")
     
     if st.session_state.inspection_logs.empty:
         st.warning("No inspection logs recorded yet. Please run an Image Upload, Live Camera capture, or Video processing first!")
     else:
-        st.map(st.session_state.inspection_logs, zoom=13)
-        st.markdown("### Live Inspection Logs")
         st.dataframe(st.session_state.inspection_logs, use_container_width=True)
 
 elif option == "Automated PDF Audit Report":
     st.subheader("Automated Professional PDF Audit Report Generation")
-    st.markdown("Generate and download an official inspection report containing real-time survey metrics and session logs.")
+    st.markdown("Generate and download an official inspection report containing real-time location names and survey metrics.")
     
     def generate_pdf(file_path):
         doc = SimpleDocTemplate(file_path, pagesize=letter)
@@ -195,24 +223,23 @@ elif option == "Automated PDF Audit Report":
         elements.append(Spacer(1, 20))
         
         elements.append(Paragraph("<b>Executive Summary:</b>", styles['Heading2']))
-        elements.append(Paragraph("This official inspection report summarizes real-time road surface conditions evaluated via automated YOLOv8 computer vision models and dynamic spatial telemetry tracking.", normal_style))
+        elements.append(Paragraph("This official inspection report summarizes real-time road surface conditions evaluated via automated YOLOv8 computer vision models paired with live browser GPS geolocation tracking.", normal_style))
         elements.append(Spacer(1, 15))
         
-        # Dynamic Table Data from session logs
-        table_data = [['Timestamp', 'Latitude', 'Longitude', 'Detections', 'Severity']]
+        # Dynamic Table Data with Location Name
+        table_data = [['Timestamp', 'Location / Area Name', 'Detections', 'Severity']]
         if st.session_state.inspection_logs.empty:
-            table_data.append([current_time_str, '31.4800', '74.3200', '0 (No inspection yet)', 'Normal'])
+            table_data.append([current_time_str, current_location_name, '0 (No inspection yet)', 'Normal'])
         else:
             for idx, row in st.session_state.inspection_logs.iterrows():
                 table_data.append([
                     str(row['Timestamp']),
-                    f"{float(row['Latitude']):.4f}",
-                    f"{float(row['Longitude']):.4f}",
+                    str(row['Location Name']),
                     str(row['Detections']),
                     str(row['Severity'])
                 ])
         
-        t = Table(table_data, colWidths=[120, 80, 80, 80, 100])
+        t = Table(table_data, colWidths=[120, 230, 70, 90])
         t.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2B6CB0")),
             ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
@@ -221,7 +248,7 @@ elif option == "Automated PDF Audit Report":
             ('BOTTOMPADDING', (0,0), (-1,0), 8),
             ('BACKGROUND', (0,1), (-1,-1), colors.HexColor("#EDF2F7")),
             ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-            ('FONTSIZE', (0,0), (-1,-1), 9)
+            ('FONTSIZE', (0,0), (-1,-1), 8)
         ]))
         
         elements.append(t)
@@ -238,4 +265,4 @@ elif option == "Automated PDF Audit Report":
                 file_name="Road_Damage_Inspection_Report.pdf",
                 mime="application/pdf"
             )
-        st.success("PDF report successfully generated with real-time session data!")
+        st.success("PDF report successfully generated with real-time location names!")
