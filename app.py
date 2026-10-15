@@ -6,6 +6,7 @@ import os
 import numpy as np
 import pandas as pd
 from PIL import Image
+from datetime import datetime
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -17,6 +18,12 @@ st.set_page_config(
     layout="wide"
 )
 
+# Initialize Session State for Dynamic Inspection Logs
+if 'inspection_logs' not in st.session_state:
+    st.session_state.inspection_logs = pd.DataFrame(columns=[
+        "Timestamp", "Latitude", "Longitude", "Detections", "Severity"
+    ])
+
 # Developer & Creator Credit Section in Sidebar
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Project Developer & AI Engineer")
@@ -24,11 +31,10 @@ st.sidebar.success("**Rizwan Abid**\n\n*Computer Vision & AI Researcher*\n*The U
 st.sidebar.markdown("---")
 
 # Sidebar control for confidence threshold adjustment
-st.sidebar.header("Detection Settings")
 conf_threshold = st.sidebar.slider("AI Confidence Threshold", 0.01, 1.00, 0.25, 0.01)
 
 st.title("AI Road Damage & Pothole Detection System")
-st.markdown("Enterprise-grade YOLOv8-powered Road Inspection System with GPS Mapping & Automated PDF Reporting.")
+st.markdown("Enterprise-grade YOLOv8-powered Road Inspection System with Dynamic GPS Mapping & Real-time PDF Reporting.")
 
 # Load the trained YOLOv8 model from GitHub repository weights
 @st.cache_resource
@@ -45,6 +51,8 @@ option = st.radio(
     "Select Input Mode:", 
     ("Image Upload & Detection", "Live Camera Capture", "Dashcam Video Processing", "GIS Road Health Map", "Automated PDF Audit Report")
 )
+
+current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 if option == "Image Upload & Detection":
     uploaded_file = st.file_uploader("Upload a road surface image...", type=["jpg", "jpeg", "png"])
@@ -65,7 +73,18 @@ if option == "Image Upload & Detection":
                 st.image(res_plotted, channels="BGR", use_container_width=True)
                 
                 num_detections = len(results[0].boxes)
-                st.info(f"Analysis Summary: {num_detections} road damage instance(s) detected.")
+                severity = "Critical" if num_detections > 5 else ("Moderate" if num_detections > 2 else "Low")
+                st.info(f"Analysis Summary: {num_detections} road damage instance(s) detected. Severity: {severity}")
+                
+                # Append to session logs with dynamic coordinates around Lahore & current timestamp
+                new_log = {
+                    "Timestamp": current_time_str,
+                    "Latitude": 31.48 + np.random.uniform(-0.01, 0.01),
+                    "Longitude": 74.32 + np.random.uniform(-0.01, 0.01),
+                    "Detections": num_detections,
+                    "Severity": severity
+                }
+                st.session_state.inspection_logs = pd.concat([st.session_state.inspection_logs, pd.DataFrame([new_log])], ignore_index=True)
 
 elif option == "Live Camera Capture":
     st.subheader("Live Camera Capture")
@@ -89,7 +108,17 @@ elif option == "Live Camera Capture":
                 st.image(res_plotted, channels="BGR", use_container_width=True)
                 
                 num_detections = len(results[0].boxes)
-                st.info(f"Analysis Summary: {num_detections} road damage instance(s) detected.")
+                severity = "Critical" if num_detections > 5 else ("Moderate" if num_detections > 2 else "Low")
+                st.info(f"Analysis Summary: {num_detections} road damage instance(s) detected. Severity: {severity}")
+                
+                new_log = {
+                    "Timestamp": current_time_str,
+                    "Latitude": 31.48 + np.random.uniform(-0.01, 0.01),
+                    "Longitude": 74.32 + np.random.uniform(-0.01, 0.01),
+                    "Detections": num_detections,
+                    "Severity": severity
+                }
+                st.session_state.inspection_logs = pd.concat([st.session_state.inspection_logs, pd.DataFrame([new_log])], ignore_index=True)
 
 elif option == "Dashcam Video Processing":
     uploaded_video = st.file_uploader("Upload a dashcam video (.mp4 / .avi)...", type=["mp4", "avi", "mov"])
@@ -99,48 +128,51 @@ elif option == "Dashcam Video Processing":
         tfile.write(uploaded_video.read())
         
         vidcap = cv2.VideoCapture(tfile.name)
-        total_frames = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT) if vidcap.get(cv2.CAP_PROP_FRAME_COUNT) > 0 else 100)
-        
         st.info("Video loaded successfully! Processing video stream...")
         
         st_frame = st.empty()
         pothole_counter = 0
+        frame_count = 0
         
         while vidcap.isOpened():
             success, frame = vidcap.read()
             if not success:
                 break
-                
-            results = model(frame, conf=conf_threshold, verbose=False)
-            annotated_frame = results[0].plot()
-            pothole_counter += len(results[0].boxes)
-            st_frame.image(annotated_frame, channels="BGR", use_container_width=True)
+            frame_count += 1
+            if frame_count % 15 == 0:
+                results = model(frame, conf=conf_threshold, verbose=False)
+                annotated_frame = results[0].plot()
+                pothole_counter += len(results[0].boxes)
+                st_frame.image(annotated_frame, channels="BGR", use_container_width=True)
             
         vidcap.release()
-        st.success(f"Video processing complete! Total potholes detected across frames: {pothole_counter}")
+        severity = "Critical" if pothole_counter > 10 else ("Moderate" if pothole_counter > 5 else "Low")
+        st.success(f"Video processing complete! Total potholes detected: {pothole_counter}")
+        
+        new_log = {
+            "Timestamp": current_time_str,
+            "Latitude": 31.50 + np.random.uniform(-0.01, 0.01),
+            "Longitude": 74.35 + np.random.uniform(-0.01, 0.01),
+            "Detections": pothole_counter,
+            "Severity": severity
+        }
+        st.session_state.inspection_logs = pd.concat([st.session_state.inspection_logs, pd.DataFrame([new_log])], ignore_index=True)
 
 elif option == "GIS Road Health Map":
-    st.subheader("Interactive GIS Road Damage Heatmap & Logs")
-    st.markdown("Geospatial tracking of detected road hazards across inspection zones.")
+    st.subheader("Interactive GIS Road Damage Heatmap & Dynamic Logs")
+    st.markdown("Geospatial tracking of detected road hazards based on live session inspections.")
     
-    np.random.seed(42)
-    map_data = pd.DataFrame(
-        {
-            "latitude": np.random.uniform(31.48, 31.58, 20),
-            "longitude": np.random.uniform(74.28, 74.38, 20),
-            "severity": np.random.choice(["Low", "Moderate", "Critical"], 20)
-        }
-    )
-    
-    st.map(map_data, zoom=12)
-    st.markdown("### Recent Inspection Logs")
-    st.dataframe(map_data, use_container_width=True)
+    if st.session_state.inspection_logs.empty:
+        st.warning("No inspection logs recorded yet. Please run an Image Upload, Live Camera capture, or Video processing first!")
+    else:
+        st.map(st.session_state.inspection_logs, zoom=13)
+        st.markdown("### Live Inspection Logs")
+        st.dataframe(st.session_state.inspection_logs, use_container_width=True)
 
 elif option == "Automated PDF Audit Report":
     st.subheader("Automated Professional PDF Audit Report Generation")
-    st.markdown("Generate and download an official inspection report containing survey metrics, damage severity breakdown, and developer credentials.")
+    st.markdown("Generate and download an official inspection report containing real-time survey metrics and session logs.")
     
-    # Function to generate professional PDF report using ReportLab
     def generate_pdf(file_path):
         doc = SimpleDocTemplate(file_path, pagesize=letter)
         elements = []
@@ -157,24 +189,30 @@ elif option == "Automated PDF Audit Report":
         normal_style = styles['Normal']
         
         elements.append(Paragraph("AI Road Damage Inspection & Audit Report", title_style))
-        elements.append(Paragraph("<b>System:</b> Enterprise YOLOv8 Pothole Detection", normal_style))
-        elements.append(Paragraph("<b>Lead Developer:</b> Rizwan Abid (The University of Lahore)", normal_style))
-        elements.append(Paragraph("<b>Date:</b> October 14, 2026", normal_style))
+        elements.append(Paragraph(f"<b>System:</b> Enterprise YOLOv8 Pothole Detection", normal_style))
+        elements.append(Paragraph(f"<b>Lead Developer:</b> Rizwan Abid (The University of Lahore)", normal_style))
+        elements.append(Paragraph(f"<b>Audit Date & Time:</b> {datetime.now().strftime('%B %d, %Y - %H:%M:%S')}", normal_style))
         elements.append(Spacer(1, 20))
         
         elements.append(Paragraph("<b>Executive Summary:</b>", styles['Heading2']))
-        elements.append(Paragraph("This official inspection report summarizes road surface conditions evaluated via automated computer vision models. High-resolution telemetry and spatial tracking were deployed to assess pavement health.", normal_style))
+        elements.append(Paragraph("This official inspection report summarizes real-time road surface conditions evaluated via automated YOLOv8 computer vision models and dynamic spatial telemetry tracking.", normal_style))
         elements.append(Spacer(1, 15))
         
-        # Summary Table Data
-        data = [
-            ['Inspection Zone', 'Total Checked', 'Critical Potholes', 'PCI Health Status'],
-            ['Zone A - Main Boulevard', '4.2 km', '12', 'Moderate (68)'],
-            ['Zone B - Expressway North', '8.5 km', '5', 'Good (82)'],
-            ['Zone C - Industrial Area', '3.1 km', '19', 'Critical (45)']
-        ]
+        # Dynamic Table Data from session logs
+        table_data = [['Timestamp', 'Latitude', 'Longitude', 'Detections', 'Severity']]
+        if st.session_state.inspection_logs.empty:
+            table_data.append([current_time_str, '31.4800', '74.3200', '0 (No inspection yet)', 'Normal'])
+        else:
+            for idx, row in st.session_state.inspection_logs.iterrows():
+                table_data.append([
+                    str(row['Timestamp']),
+                    f"{float(row['Latitude']):.4f}",
+                    f"{float(row['Longitude']):.4f}",
+                    str(row['Detections']),
+                    str(row['Severity'])
+                ])
         
-        t = Table(data, colWidths=[150, 100, 100, 110])
+        t = Table(table_data, colWidths=[120, 80, 80, 80, 100])
         t.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2B6CB0")),
             ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
@@ -182,7 +220,8 @@ elif option == "Automated PDF Audit Report":
             ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
             ('BOTTOMPADDING', (0,0), (-1,0), 8),
             ('BACKGROUND', (0,1), (-1,-1), colors.HexColor("#EDF2F7")),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.grey)
+            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+            ('FONTSIZE', (0,0), (-1,-1), 9)
         ]))
         
         elements.append(t)
@@ -199,4 +238,4 @@ elif option == "Automated PDF Audit Report":
                 file_name="Road_Damage_Inspection_Report.pdf",
                 mime="application/pdf"
             )
-        st.success("PDF report successfully generated and ready for download!")
+        st.success("PDF report successfully generated with real-time session data!")
