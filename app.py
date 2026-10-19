@@ -12,17 +12,50 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-# Page Configuration for the Streamlit web application
+# Page Configuration
 st.set_page_config(
     page_title="AI Road Damage & Pothole Inspector",
-    layout="wide"
+    page_layout="wide"
 )
 
-# Initialize Session State for Dynamic Inspection Logs
+# 1. Custom UI & Styling (Modern Enterprise CSS)
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f8fafc;
+    }
+    .stAlert {
+        border-radius: 8px;
+    }
+    .metric-card {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        text-align: center;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# 2. Permanent Storage Setup (CSV Log Persistence)
+CSV_LOG_FILE = "inspection_history.csv"
+
+def load_logs():
+    if os.path.exists(CSV_LOG_FILE):
+        try:
+            return pd.read_csv(CSV_LOG_FILE)
+        except Exception:
+            pass
+    return pd.DataFrame(columns=["Timestamp", "Location Name", "Detections", "Severity"])
+
+def save_log(new_row):
+    df = load_logs()
+    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    df.to_csv(CSV_LOG_FILE, index=False)
+    st.session_state.inspection_logs = df
+
 if 'inspection_logs' not in st.session_state:
-    st.session_state.inspection_logs = pd.DataFrame(columns=[
-        "Timestamp", "Location Name", "Detections", "Severity"
-    ])
+    st.session_state.inspection_logs = load_logs()
 
 # Developer & Creator Credit Section in Sidebar
 st.sidebar.markdown("---")
@@ -30,22 +63,22 @@ st.sidebar.markdown("### Project Developer & AI Engineer")
 st.sidebar.success("**Rizwan Abid**\n\n*Computer Vision & AI Researcher*\n*The University of Lahore*")
 st.sidebar.markdown("---")
 
-# Exact Location Input for 100% Accurate Reporting
-st.sidebar.header("📍 Exact Location Settings")
+# Exact Location Input for Accurate Reporting
+st.sidebar.header("📍 Location Settings")
 exact_location_name = st.sidebar.text_input(
-    "Apni Exact Jagah / Area ka Naam Likhein:", 
+    "Inspection Location / Area Name:", 
     value="The University of Lahore, Defense Road"
 )
 
-st.sidebar.info(f"**Current Set Location:**\n\n{exact_location_name}")
+st.sidebar.info(f"**Active Location:**\n\n{exact_location_name}")
 
-# Sidebar control for confidence threshold adjustment
+# Model Confidence Threshold Slider
 conf_threshold = st.sidebar.slider("AI Confidence Threshold", 0.01, 1.00, 0.25, 0.01)
 
 st.title("AI Road Damage & Pothole Detection System")
-st.markdown("Enterprise-grade YOLOv8-powered Road Inspection System with Exact Location & PDF Reporting.")
+st.markdown("Enterprise-grade YOLOv8-powered Road Inspection System with Persistent Logs, Analytics & PDF Reporting.")
 
-# Load the trained YOLOv8 model from GitHub repository weights
+# Load YOLOv8 Model
 @st.cache_resource
 def load_model():
     return YOLO('best.pt')
@@ -53,12 +86,12 @@ def load_model():
 try:
     model = load_model()
 except Exception as e:
-    st.error(f"Error loading model weights: {e}. Please ensure 'best.pt' is present in the GitHub repository.")
+    st.error(f"Error loading model weights: {e}. Please ensure 'best.pt' is in the GitHub repository.")
 
-# Select input mode
+# Navigation Options
 option = st.radio(
-    "Select Input Mode:", 
-    ("Image Upload & Detection", "Live Camera Capture", "Dashcam Video Processing", "GIS Road Health Map", "Automated PDF Audit Report")
+    "Select Input / Dashboard Mode:", 
+    ("Image Upload & Detection", "Live Camera Capture", "Dashcam Video Processing", "GIS Map & Analytics Dashboard", "Automated PDF Audit Report")
 )
 
 current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -83,15 +116,23 @@ if option == "Image Upload & Detection":
                 
                 num_detections = len(results[0].boxes)
                 severity = "Critical" if num_detections > 5 else ("Moderate" if num_detections > 2 else "Low")
-                st.info(f"Analysis Summary: {num_detections} road damage instance(s) detected. Location: {exact_location_name}")
                 
+                # Smart Alert System Banner
+                if severity == "Critical":
+                    st.error(f"🚨 ALERT: Critical road damage detected! ({num_detections} instances at {exact_location_name})")
+                elif severity == "Moderate":
+                    st.warning(f"⚠️ WARNING: Moderate road wear detected. ({num_detections} instances)")
+                else:
+                    st.success(f"✅ Good condition: Minor or no damage detected. ({num_detections} instances)")
+                
+                # Save to persistent storage
                 new_log = {
                     "Timestamp": current_time_str,
                     "Location Name": exact_location_name,
                     "Detections": num_detections,
                     "Severity": severity
                 }
-                st.session_state.inspection_logs = pd.concat([st.session_state.inspection_logs, pd.DataFrame([new_log])], ignore_index=True)
+                save_log(new_log)
 
 elif option == "Live Camera Capture":
     st.subheader("Live Camera Capture")
@@ -116,7 +157,13 @@ elif option == "Live Camera Capture":
                 
                 num_detections = len(results[0].boxes)
                 severity = "Critical" if num_detections > 5 else ("Moderate" if num_detections > 2 else "Low")
-                st.info(f"Analysis Summary: {num_detections} road damage instance(s) detected. Location: {exact_location_name}")
+                
+                if severity == "Critical":
+                    st.error(f"🚨 ALERT: Critical road damage detected! ({num_detections} instances)")
+                elif severity == "Moderate":
+                    st.warning(f"⚠️ WARNING: Moderate road wear detected. ({num_detections} instances)")
+                else:
+                    st.success(f"✅ Good condition. ({num_detections} instances)")
                 
                 new_log = {
                     "Timestamp": current_time_str,
@@ -124,7 +171,7 @@ elif option == "Live Camera Capture":
                     "Detections": num_detections,
                     "Severity": severity
                 }
-                st.session_state.inspection_logs = pd.concat([st.session_state.inspection_logs, pd.DataFrame([new_log])], ignore_index=True)
+                save_log(new_log)
 
 elif option == "Dashcam Video Processing":
     uploaded_video = st.file_uploader("Upload a dashcam video (.mp4 / .avi)...", type=["mp4", "avi", "mov"])
@@ -153,7 +200,11 @@ elif option == "Dashcam Video Processing":
             
         vidcap.release()
         severity = "Critical" if pothole_counter > 10 else ("Moderate" if pothole_counter > 5 else "Low")
-        st.success(f"Video processing complete! Total potholes detected: {pothole_counter} at {exact_location_name}")
+        
+        if severity == "Critical":
+            st.error(f"🚨 Video Audit Complete: Critical Damage Level! Total Potholes: {pothole_counter}")
+        else:
+            st.success(f"Video processing complete! Total potholes detected: {pothole_counter}")
         
         new_log = {
             "Timestamp": current_time_str,
@@ -161,20 +212,42 @@ elif option == "Dashcam Video Processing":
             "Detections": pothole_counter,
             "Severity": severity
         }
-        st.session_state.inspection_logs = pd.concat([st.session_state.inspection_logs, pd.DataFrame([new_log])], ignore_index=True)
+        save_log(new_log)
 
-elif option == "GIS Road Health Map":
-    st.subheader("Interactive Inspection Logs & Location Records")
-    st.markdown("Detailed breakdown of inspected zones and location records.")
+elif option == "GIS Map & Analytics Dashboard":
+    st.subheader("📊 Inspection Analytics & Persistent Logs Dashboard")
+    st.markdown("Detailed breakdown of inspected zones, severity analytics, and permanent records.")
     
-    if st.session_state.inspection_logs.empty:
+    logs_df = load_logs()
+    
+    if logs_df.empty:
         st.warning("No inspection logs recorded yet. Please run an Image Upload, Live Camera capture, or Video processing first!")
     else:
-        st.dataframe(st.session_state.inspection_logs, use_container_width=True)
+        # Analytics Section: Severity Distribution Chart
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown("### Severity Breakdown")
+            severity_counts = logs_df['Severity'].value_counts()
+            st.bar_chart(severity_counts)
+        with col_b:
+            st.markdown("### Total Detections per Zone")
+            if 'Location Name' in logs_df.columns and not logs_df.empty:
+                loc_summary = logs_df.groupby('Location Name')['Detections'].sum()
+                st.bar_chart(loc_summary)
+        
+        st.markdown("### 📋 Permanent Inspection Logs (Saved in Database)")
+        st.dataframe(logs_df, use_container_width=True)
+        
+        if st.button("🗑️ Clear All Inspection History"):
+            if os.path.exists(CSV_LOG_FILE):
+                os.remove(CSV_LOG_FILE)
+            st.session_state.inspection_logs = pd.DataFrame(columns=["Timestamp", "Location Name", "Detections", "Severity"])
+            st.success("Inspection history cleared successfully!")
+            st.rerun()
 
 elif option == "Automated PDF Audit Report":
     st.subheader("Automated Professional PDF Audit Report Generation")
-    st.markdown("Generate and download an official inspection report containing your exact location name and survey metrics.")
+    st.markdown("Generate and download an official inspection report containing all persistent inspection logs and analytics.")
     
     def generate_pdf(file_path):
         doc = SimpleDocTemplate(file_path, pagesize=letter)
@@ -198,15 +271,16 @@ elif option == "Automated PDF Audit Report":
         elements.append(Spacer(1, 20))
         
         elements.append(Paragraph("<b>Executive Summary:</b>", styles['Heading2']))
-        elements.append(Paragraph("This official inspection report summarizes real-time road surface conditions evaluated via automated YOLOv8 computer vision models paired with exact spatial location telemetry.", normal_style))
+        elements.append(Paragraph("This official inspection report summarizes real-time road surface conditions evaluated via automated YOLOv8 computer vision models paired with permanent historical logging and analytics telemetry.", normal_style))
         elements.append(Spacer(1, 15))
         
-        # Dynamic Table Data with Exact Location Name
-        table_data = [['Timestamp', 'Exact Location / Area Name', 'Detections', 'Severity']]
-        if st.session_state.inspection_logs.empty:
+        # Table Data from Persistent Logs
+        logs_df = load_logs()
+        table_data = [['Timestamp', 'Location / Area Name', 'Detections', 'Severity']]
+        if logs_df.empty:
             table_data.append([current_time_str, exact_location_name, '0 (No inspection yet)', 'Normal'])
         else:
-            for idx, row in st.session_state.inspection_logs.iterrows():
+            for idx, row in logs_df.iterrows():
                 table_data.append([
                     str(row['Timestamp']),
                     str(row['Location Name']),
@@ -240,4 +314,4 @@ elif option == "Automated PDF Audit Report":
                 file_name="Road_Damage_Inspection_Report.pdf",
                 mime="application/pdf"
             )
-        st.success("PDF report successfully generated with exact location name!")
+        st.success("PDF report successfully generated with analytics and historical data!")
