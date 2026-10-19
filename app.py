@@ -49,13 +49,13 @@ if 'inspection_logs' not in st.session_state:
 # Sidebar Developer Info & Location Settings
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Project Developer & AI Engineer")
-st.sidebar.success("**Rizwan Abid**\n\n*Computer Vision & AI Researcher*\n*The University of Lahore*")
+st.sidebar.success("**Rizwan Abid**\n\n*Computer Vision & AI Researcher*\n*Arfa Karim Technology Incubator*")
 st.sidebar.markdown("---")
 
 st.sidebar.header("📍 Location Settings")
 exact_location_name = st.sidebar.text_input(
     "Inspection Location / Area Name:", 
-    value="The University of Lahore, Defense Road"
+    value="Arfa Karim Technology Incubator, Lahore"
 )
 st.sidebar.info(f"**Active Location:**\n\n{exact_location_name}")
 
@@ -160,7 +160,6 @@ elif option == "Dashcam Video Processing":
         pothole_counter = 0
         frame_count = 0
         
-        # Process video frames safely
         while vidcap.isOpened():
             success, frame = vidcap.read()
             if not success:
@@ -228,7 +227,7 @@ elif option == "Automated PDF Audit Report":
         
         elements.append(Paragraph("AI Road Damage Inspection & Audit Report", title_style))
         elements.append(Paragraph("<b>System:</b> Enterprise YOLOv8 Pothole Detection", normal_style))
-        elements.append(Paragraph("<b>Lead Developer:</b> Rizwan Abid (The University of Lahore)", normal_style))
+        elements.append(Paragraph("<b>Lead Developer:</b> Rizwan Abid (Arfa Karim Technology Incubator)", normal_style))
         elements.append(Paragraph(f"<b>Audit Date & Time:</b> {datetime.now().strftime('%B %d, %Y - %H:%M:%S')}", normal_style))
         elements.append(Spacer(1, 20))
         
